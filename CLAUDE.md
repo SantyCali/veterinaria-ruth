@@ -6,7 +6,7 @@ Contexto del proyecto para Claude Code. Lo comparten Santi y Gabi, los dos desar
 
 **Veterinaria Ruth**: sistema de gestión para una clínica veterinaria real. Cubre clientes, mascotas, historia clínica, tratamientos, estudios (archivos), turnos con calendario, agenda diaria y un panel principal.
 
-- Requerimientos completos: [docs/requerimientos.md](docs/requerimientos.md). Es la fuente de verdad del alcance: consultarla antes de diseñar un módulo.
+- Requerimientos completos: [docs/requerimientos.md](docs/requerimientos.md). Es la fuente de verdad del alcance y se carga completa al final de este archivo.
 - Hoja de ruta por etapas: [README.md](README.md). Marcar las etapas a medida que se completan.
 - Flujo de ramas y Pull Requests: [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -53,3 +53,7 @@ Fuera de alcance por ahora: inventario y stock. Más adelante: avisos por WhatsA
 ## Comandos
 
 Todavía no hay proyecto Expo: se crea en la etapa 1 (`feature/setup`). Cuando exista, completar esta sección con los comandos para iniciar, testear, lintear y migrar.
+
+## Requerimientos completos
+
+@docs/requerimientos.md
