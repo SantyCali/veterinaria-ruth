@@ -1,0 +1,40 @@
+# Dependencias
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Builds nativos
+android/
+ios/
+*.apk
+*.aab
+*.ipa
+
+# Claves y variables de entorno (NUNCA subir)
+.env
+.env*.local
+*.pem
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Supabase local
+supabase/.temp/
+supabase/.branches/
+
+# Sistema / editor
+.DS_Store
+Thumbs.db
+*.log
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Claude Code (config local)
+.claude/settings.local.json
