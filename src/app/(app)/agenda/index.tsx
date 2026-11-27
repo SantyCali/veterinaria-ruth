@@ -17,6 +17,7 @@ import {
   Screen,
   SectionTitle,
   Segmented,
+  TimeInput,
   Txt,
 } from '@/components/ui';
 import { addDays, fmtDateTime, fmtLongDate, fmtTime, inputToDateTime, fmtDate, sameDay, startOfDay, toDbDate } from '@/lib/dates';
@@ -150,11 +151,9 @@ export default function AgendaScreen() {
               <Field label="Qué hay que hacer" required>
                 <Input value={title} onChangeText={setTitle} placeholder="Ej: llamar al dueño de Toby" onSubmitEditing={addTask} />
               </Field>
-              <View style={{ width: 120 }}>
-                <Field label="Hora" hint="HH:MM">
-                  <Input value={time} onChangeText={setTime} placeholder="16:00" />
-                </Field>
-              </View>
+              <Field label="Hora" width={120}>
+                <TimeInput value={time} onChangeText={setTime} placeholder="16:00" />
+              </Field>
             </FormRow>
             <Field label="Detalle">
               <Input value={description} onChangeText={setDescription} />

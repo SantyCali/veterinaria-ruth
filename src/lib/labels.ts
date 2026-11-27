@@ -13,13 +13,20 @@ import type {
 
 type Tone = { label: string; fg: string; bg: string };
 
+// Las claves (perro, gato) son los valores del enum en la base; lo que se muestra es Canino y Felino.
+// Las especies de campo están para poder elegirlas, pero la clínica atiende sobre todo caninos y felinos.
 export const speciesLabel: Record<PetSpecies, string> = {
-  perro: 'Perro',
-  gato: 'Gato',
+  perro: 'Canino',
+  gato: 'Felino',
   ave: 'Ave',
   conejo: 'Conejo',
   roedor: 'Roedor',
   reptil: 'Reptil',
+  equino: 'Equino',
+  bovino: 'Bovino',
+  ovino: 'Ovino',
+  caprino: 'Caprino',
+  porcino: 'Porcino',
   otro: 'Otro',
 };
 
@@ -80,5 +87,10 @@ export const speciesIcon: Record<PetSpecies, IconName> = {
   conejo: 'rabbit',
   roedor: 'rodent',
   reptil: 'snake',
+  equino: 'horse',
+  bovino: 'cow',
+  ovino: 'sheep',
+  caprino: 'paw',
+  porcino: 'pig',
   otro: 'paw',
 };

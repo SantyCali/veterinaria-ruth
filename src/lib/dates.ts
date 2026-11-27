@@ -60,6 +60,35 @@ export function inputToDbDate(text: string): string | null {
   return toDbDate(d);
 }
 
+/**
+ * Arma "DD/MM/AAAA" con lo que se va escribiendo: deja solo los números y pone las
+ * barras. Al escribir, la barra aparece apenas se completa el día o el mes; al
+ * borrar no se vuelve a poner, así se puede borrar de corrido.
+ */
+export function maskDateInput(next: string, prev: string) {
+  return maskDigits(next, prev, [2, 4], '/', 8);
+}
+
+/** Igual que maskDateInput, para "HH:MM". */
+export function maskTimeInput(next: string, prev: string) {
+  return maskDigits(next, prev, [2], ':', 4);
+}
+
+function maskDigits(next: string, prev: string, cuts: number[], sep: string, max: number) {
+  const digits = next.replace(/\D/g, '').slice(0, max);
+  let out = '';
+  let from = 0;
+  for (const cut of cuts) {
+    if (digits.length <= cut) break;
+    out += digits.slice(from, cut) + sep;
+    from = cut;
+  }
+  out += digits.slice(from);
+  const deleting = next.length < prev.length;
+  if (!deleting && cuts.includes(digits.length)) out += sep;
+  return out;
+}
+
 /** "24/10/2026" + "10:30" -> Date o null. */
 export function inputToDateTime(dateText: string, timeText: string): Date | null {
   const day = inputToDbDate(dateText);

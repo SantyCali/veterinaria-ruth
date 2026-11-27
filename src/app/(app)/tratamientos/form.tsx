@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 
-import { Button, Card, ErrorBox, Field, FormRow, Input, Loading, Row, Screen } from '@/components/ui';
+import { Button, Card, DateInput, ErrorBox, Field, FormRow, Input, Loading, Row, Screen } from '@/components/ui';
 import { fmtDate, inputToDbDate } from '@/lib/dates';
 import { supabase } from '@/lib/supabase';
 import { space } from '@/lib/theme';
@@ -112,11 +112,11 @@ export default function TreatmentFormScreen() {
             </Field>
           </FormRow>
           <FormRow>
-            <Field label="Fecha de inicio" hint="DD/MM/AAAA">
-              <Input value={form.start_date} onChangeText={set('start_date')} />
+            <Field label="Fecha de inicio">
+              <DateInput value={form.start_date} onChangeText={set('start_date')} />
             </Field>
-            <Field label="Fecha de finalización" hint="DD/MM/AAAA">
-              <Input value={form.end_date} onChangeText={set('end_date')} />
+            <Field label="Fecha de finalización">
+              <DateInput value={form.end_date} onChangeText={set('end_date')} />
             </Field>
           </FormRow>
           <Field label="Indicaciones adicionales">

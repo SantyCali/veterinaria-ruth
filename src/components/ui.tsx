@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import type { ComponentProps, ReactNode } from 'react';
+import { createContext, useContext, type ComponentProps, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { maskDateInput, maskTimeInput } from '@/lib/dates';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
 export type IconName = ComponentProps<typeof MaterialCommunityIcons>['name'];
@@ -232,26 +233,42 @@ export function IconButton({
 
 // ---------------------------------------------------------------- Formularios
 
+/**
+ * Un Field reparte el ancho con los demás solo cuando está dentro de un FormRow.
+ * Afuera (en columna) ocupa lo que mide su contenido: si usara flex: 1 ahí, en web
+ * su alto queda fijo y lo que se despliega adentro (como la lista de ClientPicker)
+ * se dibuja encima de los campos de abajo.
+ */
+const InFormRow = createContext(false);
+
 export function Field({
   label,
   required,
   hint,
   error,
+  minWidth = 220,
+  width,
   children,
 }: {
   label: string;
   required?: boolean;
   hint?: string;
   error?: string | null;
+  /** Ancho mínimo dentro de un FormRow antes de pasar a la línea de abajo. */
+  minWidth?: number;
+  /** Ancho fijo dentro de un FormRow (por ejemplo, para la hora). */
+  width?: number;
   children: ReactNode;
 }) {
+  const inRow = useContext(InFormRow);
+  const layout: ViewStyle = !inRow ? {} : width ? { width } : { flex: 1, minWidth };
   return (
-    <View style={{ gap: 6, flex: 1, minWidth: 220 }}>
+    <View style={[{ gap: 6 }, layout]}>
       <Text style={s.fieldLabel}>
         {label}
         {required ? <Text style={{ color: colors.accent }}> *</Text> : null}
       </Text>
-      {children}
+      <InFormRow.Provider value={false}>{children}</InFormRow.Provider>
       {error ? <Text style={s.fieldError}>{error}</Text> : hint ? <Txt variant="small">{hint}</Txt> : null}
     </View>
   );
@@ -269,8 +286,47 @@ export function Input(props: TextInputProps & { invalid?: boolean }) {
   );
 }
 
+type MaskedInputProps = Omit<TextInputProps, 'value' | 'onChangeText'> & {
+  value: string;
+  onChangeText: (text: string) => void;
+};
+
+/** Fecha DD/MM/AAAA: se escriben solo los números y las barras se ponen solas. */
+export function DateInput({ value, onChangeText, ...rest }: MaskedInputProps) {
+  return (
+    <Input
+      placeholder="DD/MM/AAAA"
+      {...rest}
+      value={value}
+      onChangeText={(t) => onChangeText(maskDateInput(t, value))}
+      keyboardType="number-pad"
+      inputMode="numeric"
+      maxLength={10}
+    />
+  );
+}
+
+/** Hora HH:MM: se escriben solo los números y los dos puntos se ponen solos. */
+export function TimeInput({ value, onChangeText, ...rest }: MaskedInputProps) {
+  return (
+    <Input
+      placeholder="HH:MM"
+      {...rest}
+      value={value}
+      onChangeText={(t) => onChangeText(maskTimeInput(t, value))}
+      keyboardType="number-pad"
+      inputMode="numeric"
+      maxLength={5}
+    />
+  );
+}
+
 export function FormRow({ children }: { children: ReactNode }) {
-  return <View style={s.formRow}>{children}</View>;
+  return (
+    <InFormRow.Provider value={true}>
+      <View style={s.formRow}>{children}</View>
+    </InFormRow.Provider>
+  );
 }
 
 /** Botones tipo "pastilla" para elegir una opción. */
