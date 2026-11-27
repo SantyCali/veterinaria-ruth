@@ -38,3 +38,12 @@ Thumbs.db
 
 # Claude Code (config local)
 .claude/settings.local.json
+
+# Extra (template Expo)
+.kotlin/
+*.orig.*
+.metro-health-check*
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.tsbuildinfo
