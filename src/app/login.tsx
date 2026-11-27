@@ -4,6 +4,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View
 import { FadeIn } from '@/components/motion';
 import { Button, ErrorBox, Field, FormRow, Icon, Input, Txt } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
+import { APP_NAME } from '@/lib/brand';
 import { toast } from '@/lib/dialogs';
 import { supabase } from '@/lib/supabase';
 import { colors, radius, space } from '@/lib/theme';
@@ -60,7 +61,7 @@ export default function LoginScreen() {
               <Icon name="paw" size={34} color={colors.primaryText} />
             </View>
             <View style={{ alignItems: 'center', gap: 2 }}>
-              <Txt variant="h1">Veterinaria Ruth</Txt>
+              <Txt variant="h1">{APP_NAME}</Txt>
               <Txt variant="label">Gestión clínica</Txt>
             </View>
   

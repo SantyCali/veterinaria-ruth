@@ -8,6 +8,9 @@ Contexto del proyecto para Claude Code. Lo comparten Santi y Gabi, los dos desar
 
 **Veterinaria Ruth**: sistema de gestión para una clínica veterinaria real. Cubre clientes, mascotas, historia clínica, tratamientos, estudios (archivos), turnos con calendario, agenda diaria y un panel principal.
 
+- **La app no lleva el nombre de nadie.** La pidió Ruth, pero la idea es alquilarla a otras veterinarias. En la interfaz y en los mensajes se dice "Veterinaria" / "la veterinaria", con `APP_NAME` y `CLINIC_IN_TEXT` de `src/lib/brand.ts`. "Veterinaria Ruth" queda solo como nombre del repo y del proyecto.
+- **Cada usuario atiende sus propios turnos.** No se elige ni se deriva a otro veterinario: el turno queda a nombre de quien lo carga (`appointments.vet_id`).
+
 - Requerimientos completos: [docs/requerimientos.md](docs/requerimientos.md). Es la fuente de verdad del alcance y se carga completa al final de este archivo.
 - Hoja de ruta por etapas y cómo arrancar: [README.md](README.md).
 - Flujo de ramas y Pull Requests: [CONTRIBUTING.md](CONTRIBUTING.md).

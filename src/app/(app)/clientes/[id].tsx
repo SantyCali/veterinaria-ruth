@@ -29,6 +29,7 @@ import type { AppointmentFull, Client, Pet } from '@/lib/types';
 import { useQuery } from '@/lib/use-query';
 import { clientDetailOffline } from '@/lib/offline-queries';
 import { openWhatsApp } from '@/lib/whatsapp';
+import { CLINIC_IN_TEXT } from '@/lib/brand';
 
 type Detail = { client: Client; pets: Pet[]; appointments: AppointmentFull[] };
 
@@ -92,7 +93,7 @@ export default function ClientDetailScreen() {
               icon="whatsapp"
               variant="secondary"
               small
-              onPress={() => openWhatsApp(client.phone, `¡Hola ${client.first_name}! Te escribimos de Veterinaria Ruth. `)}
+              onPress={() => openWhatsApp(client.phone, `¡Hola ${client.first_name}! Te escribimos de ${CLINIC_IN_TEXT}. `)}
             />
           ) : null}
           <Button title="Editar" icon="pencil-outline" variant="secondary" small onPress={() => router.push({ pathname: '/clientes/form', params: { id } })} />

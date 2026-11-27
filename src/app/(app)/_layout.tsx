@@ -7,6 +7,7 @@ import { OfflineBanner } from '@/components/offline-banner';
 import { useOfflineSync } from '@/lib/offline';
 import { Avatar, Icon, initials, Txt, type IconName } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
+import { APP_NAME } from '@/lib/brand';
 import { roleLabel } from '@/lib/labels';
 import { colors, fonts, radius, space, WIDE_BREAKPOINT } from '@/lib/theme';
 
@@ -71,7 +72,7 @@ function Sidebar({ pathname }: { pathname: string }) {
           <Icon name="paw" size={20} color={colors.primaryText} />
         </View>
         <View>
-          <Text style={styles.brandTitle}>Veterinaria Ruth</Text>
+          <Text style={styles.brandTitle}>{APP_NAME}</Text>
           <Txt variant="label">Gestión clínica</Txt>
         </View>
       </View>

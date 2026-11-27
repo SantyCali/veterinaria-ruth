@@ -16,10 +16,11 @@ import {
   TimeInput,
 } from '@/components/ui';
 import { fmtDate, fmtTime, inputToDateTime } from '@/lib/dates';
+import { useAuth } from '@/lib/auth';
 import { confirm, toast } from '@/lib/dialogs';
 import { supabase } from '@/lib/supabase';
 import { space } from '@/lib/theme';
-import type { Appointment, PetWithClient, Profile } from '@/lib/types';
+import type { Appointment, PetWithClient } from '@/lib/types';
 
 const DURATIONS = ['15', '30', '45', '60', '90'] as const;
 
@@ -32,21 +33,13 @@ export default function AppointmentFormScreen() {
   const [duration, setDuration] = useState<string>('30');
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
-  const [vetId, setVetId] = useState<string>('none');
-  const [vets, setVets] = useState<Pick<Profile, 'id' | 'first_name' | 'last_name'>[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { profile } = useAuth();
 
   useEffect(() => {
     async function load() {
-      const { data: v } = await supabase
-        .from('profiles')
-        .select('id, first_name, last_name')
-        .eq('active', true)
-        .order('first_name');
-      setVets(v ?? []);
-
       let targetPet = petId;
       if (id) {
         const { data, error: err } = await supabase.from('appointments').select('*').eq('id', id).single();
@@ -59,7 +52,6 @@ export default function AppointmentFormScreen() {
           setDuration(String(a.duration_min));
           setReason(a.reason);
           setNotes(a.notes ?? '');
-          setVetId(a.vet_id ?? 'none');
         }
       }
       if (targetPet) {
@@ -106,17 +98,22 @@ export default function AppointmentFormScreen() {
     const payload = {
       pet_id: pet.id,
       client_id: pet.client_id,
-      vet_id: vetId === 'none' ? null : vetId,
       starts_at: when.toISOString(),
       duration_min: minutes,
       reason: reason.trim(),
       notes: notes.trim() || null,
     };
 
+    // No se elige veterinario: quien usa el sistema es quien atiende sus turnos.
+    // Al crear, el turno queda a nombre de quien lo carga; al modificar no se toca.
     setSaving(true);
     const res = id
       ? await supabase.from('appointments').update(payload).eq('id', id).select('id').single()
-      : await supabase.from('appointments').insert(payload).select('id').single();
+      : await supabase
+          .from('appointments')
+          .insert({ ...payload, vet_id: profile?.id ?? null })
+          .select('id')
+          .single();
     setSaving(false);
     if (res.error) {
       toast.error('No se pudo guardar el turno', res.error.message);
@@ -145,16 +142,6 @@ export default function AppointmentFormScreen() {
         </Field>
         <Field label="Motivo de la consulta" required>
           <Input value={reason} onChangeText={setReason} placeholder="Ej: vacunación, control, cirugía" />
-        </Field>
-        <Field label="Veterinario">
-          <Segmented
-            value={vetId}
-            onChange={setVetId}
-            options={[
-              { value: 'none', label: 'Sin asignar' },
-              ...vets.map((v) => ({ value: v.id, label: `${v.first_name} ${v.last_name}`.trim() || 'Usuario' })),
-            ]}
-          />
         </Field>
         <Field label="Notas">
           <Input value={notes} onChangeText={setNotes} multiline />
