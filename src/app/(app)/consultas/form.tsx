@@ -6,6 +6,7 @@ import { PetPicker } from '@/components/pickers';
 import {
   Button,
   Card,
+  DateInput,
   ErrorBox,
   Field,
   FormRow,
@@ -15,6 +16,7 @@ import {
   Row,
   Screen,
   Segmented,
+  TimeInput,
   Txt,
 } from '@/components/ui';
 import { fmtDate, fmtTime, inputToDateTime } from '@/lib/dates';
@@ -165,11 +167,11 @@ export default function ConsultationFormScreen() {
           ) : null}
 
           <FormRow>
-            <Field label="Fecha" required hint="DD/MM/AAAA">
-              <Input value={date} onChangeText={setDate} keyboardType="numbers-and-punctuation" />
+            <Field label="Fecha" required>
+              <DateInput value={date} onChangeText={setDate} />
             </Field>
-            <Field label="Hora" required hint="HH:MM">
-              <Input value={time} onChangeText={setTime} keyboardType="numbers-and-punctuation" />
+            <Field label="Hora" required>
+              <TimeInput value={time} onChangeText={setTime} />
             </Field>
             <Field label="Peso (kg)">
               <Input value={weight} onChangeText={setWeight} keyboardType="decimal-pad" placeholder="Ej: 12,5" />

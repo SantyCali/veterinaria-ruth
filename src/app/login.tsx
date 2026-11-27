@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { Button, ErrorBox, Field, Icon, Input, Txt } from '@/components/ui';
+import { Button, ErrorBox, Field, FormRow, Icon, Input, Txt } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { notify } from '@/lib/dialogs';
 import { supabase } from '@/lib/supabase';
@@ -64,14 +64,14 @@ export default function LoginScreen() {
           </Txt>
 
           {mode === 'signup' && (
-            <View style={{ flexDirection: 'row', gap: space.md }}>
-              <Field label="Nombre" required>
+            <FormRow>
+              <Field label="Nombre" required minWidth={130}>
                 <Input value={firstName} onChangeText={setFirstName} autoComplete="given-name" />
               </Field>
-              <Field label="Apellido" required>
+              <Field label="Apellido" required minWidth={130}>
                 <Input value={lastName} onChangeText={setLastName} autoComplete="family-name" />
               </Field>
-            </View>
+            </FormRow>
           )}
 
           <Field label="Email" required>

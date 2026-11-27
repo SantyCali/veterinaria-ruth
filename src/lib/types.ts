@@ -3,7 +3,19 @@
 //   npx supabase gen types typescript --linked > src/lib/database.types.ts
 
 export type UserRole = 'admin' | 'veterinario';
-export type PetSpecies = 'perro' | 'gato' | 'ave' | 'conejo' | 'roedor' | 'reptil' | 'otro';
+export type PetSpecies =
+  | 'perro'
+  | 'gato'
+  | 'ave'
+  | 'conejo'
+  | 'roedor'
+  | 'reptil'
+  | 'equino'
+  | 'bovino'
+  | 'ovino'
+  | 'caprino'
+  | 'porcino'
+  | 'otro';
 export type PetSex = 'macho' | 'hembra';
 export type PetStatus = 'activa' | 'inactiva' | 'fallecida';
 export type AppointmentStatus = 'pendiente' | 'atendido' | 'cancelado';

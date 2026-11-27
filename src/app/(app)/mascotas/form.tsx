@@ -2,7 +2,20 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 
 import { ClientPicker } from '@/components/pickers';
-import { Button, Card, ErrorBox, Field, FormRow, Input, Loading, Row, Screen, Segmented, Txt } from '@/components/ui';
+import {
+  Button,
+  Card,
+  DateInput,
+  ErrorBox,
+  Field,
+  FormRow,
+  Input,
+  Loading,
+  Row,
+  Screen,
+  Segmented,
+  Txt,
+} from '@/components/ui';
 import { fmtDate, inputToDbDate } from '@/lib/dates';
 import { speciesOptions } from '@/lib/labels';
 import { supabase } from '@/lib/supabase';
@@ -119,8 +132,8 @@ export default function PetFormScreen() {
           </Field>
 
           <FormRow>
-            <Field label="Fecha de nacimiento" hint="DD/MM/AAAA (aproximada si no se sabe)">
-              <Input value={birth} onChangeText={setBirth} placeholder="15/03/2022" keyboardType="numbers-and-punctuation" />
+            <Field label="Fecha de nacimiento" hint="Aproximada si no se sabe">
+              <DateInput value={birth} onChangeText={setBirth} />
             </Field>
             <Field label="Sexo">
               <Segmented<PetSex>

@@ -2,7 +2,21 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 
 import { PetPicker } from '@/components/pickers';
-import { Button, Card, ErrorBox, Field, FormRow, Input, Loading, Row, Screen, Segmented, Txt } from '@/components/ui';
+import {
+  Button,
+  Card,
+  DateInput,
+  ErrorBox,
+  Field,
+  FormRow,
+  Input,
+  Loading,
+  Row,
+  Screen,
+  Segmented,
+  TimeInput,
+  Txt,
+} from '@/components/ui';
 import { fmtDate, fmtTime, inputToDateTime } from '@/lib/dates';
 import { supabase } from '@/lib/supabase';
 import { space } from '@/lib/theme';
@@ -117,11 +131,11 @@ export default function AppointmentFormScreen() {
             <PetPicker value={pet} onChange={setPet} />
           </Field>
           <FormRow>
-            <Field label="Fecha" required hint="DD/MM/AAAA">
-              <Input value={date} onChangeText={setDate} keyboardType="numbers-and-punctuation" />
+            <Field label="Fecha" required>
+              <DateInput value={date} onChangeText={setDate} />
             </Field>
-            <Field label="Hora" required hint="HH:MM">
-              <Input value={time} onChangeText={setTime} placeholder="10:30" keyboardType="numbers-and-punctuation" />
+            <Field label="Hora" required>
+              <TimeInput value={time} onChangeText={setTime} />
             </Field>
           </FormRow>
           <Field label="Duración (minutos)">
