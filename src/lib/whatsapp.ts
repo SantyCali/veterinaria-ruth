@@ -1,5 +1,6 @@
 import { Linking, Platform } from 'react-native';
 
+import { CLINIC_IN_TEXT } from './brand';
 import { fmtDate, fmtTime } from './dates';
 
 // Recordatorios por WhatsApp con "click to chat" (wa.me): abre WhatsApp con el
@@ -28,19 +29,17 @@ export async function openWhatsApp(phone: string | null | undefined, text: strin
   else await Linking.openURL(url);
 }
 
-const CLINIC = 'Veterinaria Ruth';
-
 export const whatsappTemplates = {
   appointment: (o: { owner?: string | null; pet: string; startsAt: string; reason: string }) =>
-    `¡Hola${o.owner ? ` ${o.owner}` : ''}! Te recordamos el turno de ${o.pet} en ${CLINIC} ` +
+    `¡Hola${o.owner ? ` ${o.owner}` : ''}! Te recordamos el turno de ${o.pet} en ${CLINIC_IN_TEXT} ` +
     `el ${fmtDate(new Date(o.startsAt))} a las ${fmtTime(o.startsAt)} hs. Motivo: ${o.reason}. ¡Te esperamos! 🐾`,
 
   vaccine: (o: { owner?: string | null; pet: string; vaccine: string; due: string }) =>
     `¡Hola${o.owner ? ` ${o.owner}` : ''}! Te recordamos que a ${o.pet} le corresponde la vacuna ` +
-    `${o.vaccine} el ${fmtDate(o.due)}. Podés pedir turno respondiendo este mensaje. ${CLINIC} 🐾`,
+    `${o.vaccine} el ${fmtDate(o.due)}. Podés pedir turno respondiendo este mensaje. 🐾`,
 
   reminder: (o: { title: string; dueAt?: string | null; detail?: string | null }) =>
-    `⏰ Recordatorio (${CLINIC}): ${o.title}` +
+    `⏰ Recordatorio: ${o.title}` +
     (o.dueAt ? ` — ${fmtDate(new Date(o.dueAt))} ${fmtTime(o.dueAt)} hs` : '') +
     (o.detail ? `\n${o.detail}` : ''),
 };

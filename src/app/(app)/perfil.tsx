@@ -227,7 +227,7 @@ function BackupCard({ isAdmin }: { isAdmin: boolean }) {
     setDownloading(true);
     try {
       const stamp = mirror.syncedAt.slice(0, 16).replace(/[:T]/g, '-');
-      await saveBackupFile(`veterinaria-ruth-backup-${stamp}.json`, json);
+      await saveBackupFile(`veterinaria-backup-${stamp}.json`, json);
       toast.success('Copia descargada', 'Guardala en un lugar seguro: tiene datos personales de los clientes.');
     } catch (e) {
       toast.error('No se pudo descargar la copia', e instanceof Error ? e.message : undefined);

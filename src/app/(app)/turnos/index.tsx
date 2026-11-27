@@ -473,8 +473,8 @@ function AppointmentDetail({
           <Txt variant="small">{fmtDate(new Date(appt.starts_at))}</Txt>
         </View>
         <View style={[styles.detailBox, { flex: 1 }]}>
-          <Txt variant="label">Profesional</Txt>
-          <Txt variant="bodyStrong">{appt.vet ? `${appt.vet.first_name} ${appt.vet.last_name}` : 'Sin asignar'}</Txt>
+          <Txt variant="label">Duración</Txt>
+          <Txt variant="bodyStrong">{appt.duration_min} min</Txt>
         </View>
       </Row>
 
