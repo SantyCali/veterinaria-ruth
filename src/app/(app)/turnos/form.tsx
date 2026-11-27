@@ -10,14 +10,13 @@ import {
   Field,
   FormRow,
   Input,
-  Loading,
   Row,
   Screen,
   Segmented,
   TimeInput,
-  Txt,
 } from '@/components/ui';
 import { fmtDate, fmtTime, inputToDateTime } from '@/lib/dates';
+import { confirm, toast } from '@/lib/dialogs';
 import { supabase } from '@/lib/supabase';
 import { space } from '@/lib/theme';
 import type { Appointment, PetWithClient, Profile } from '@/lib/types';
@@ -38,7 +37,6 @@ export default function AppointmentFormScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [warning, setWarning] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -79,7 +77,6 @@ export default function AppointmentFormScreen() {
 
   async function save() {
     setError(null);
-    setWarning(null);
     if (!pet) return setError('Elegí la mascota.');
     if (!reason.trim()) return setError('El motivo es obligatorio.');
     const when = inputToDateTime(date, time);
@@ -97,9 +94,13 @@ export default function AppointmentFormScreen() {
     const clash = (overlap ?? []).some(
       (o) => o.id !== id && new Date(o.starts_at).getTime() + o.duration_min * 60000 > when.getTime(),
     );
-    if (clash && !warning) {
-      setWarning('Hay otro turno pendiente en ese horario. Tocá "Guardar" de nuevo para confirmar igual.');
-      return;
+    if (clash) {
+      const ok = await confirm(
+        'Horario ocupado',
+        'Ya hay otro turno pendiente en ese horario. ¿Querés guardarlo igual?',
+        { okText: 'Guardar igual' },
+      );
+      if (!ok) return;
     }
 
     const payload = {
@@ -117,56 +118,55 @@ export default function AppointmentFormScreen() {
       ? await supabase.from('appointments').update(payload).eq('id', id).select('id').single()
       : await supabase.from('appointments').insert(payload).select('id').single();
     setSaving(false);
-    if (res.error) return setError(res.error.message);
+    if (res.error) {
+      toast.error('No se pudo guardar el turno', res.error.message);
+      return setError(res.error.message);
+    }
+    toast.success(id ? 'Turno modificado' : 'Turno agendado', `${pet.name} · ${fmtDate(when)} ${fmtTime(when)}`);
     router.replace({ pathname: '/turnos', params: { turno: res.data.id } });
   }
 
   return (
-    <Screen title={id ? 'Modificar turno' : 'Nuevo turno'} back>
-      {loading ? (
-        <Loading />
-      ) : (
-        <Card style={{ gap: space.lg }}>
-          <Field label="Mascota" required hint="El turno queda asignado también a su dueño actual">
-            <PetPicker value={pet} onChange={setPet} />
+    <Screen title={id ? 'Modificar turno' : 'Nuevo turno'} back loading={loading}>
+      <Card style={{ gap: space.lg }}>
+        <Field label="Mascota" required hint="El turno queda asignado también a su dueño actual">
+          <PetPicker value={pet} onChange={setPet} />
+        </Field>
+        <FormRow>
+          <Field label="Fecha" required>
+            <DateInput value={date} onChangeText={setDate} />
           </Field>
-          <FormRow>
-            <Field label="Fecha" required>
-              <DateInput value={date} onChangeText={setDate} />
-            </Field>
-            <Field label="Hora" required>
-              <TimeInput value={time} onChangeText={setTime} />
-            </Field>
-          </FormRow>
-          <Field label="Duración (minutos)">
-            <Segmented value={duration} onChange={setDuration} options={DURATIONS.map((d) => ({ value: d, label: d }))} />
+          <Field label="Hora" required>
+            <TimeInput value={time} onChangeText={setTime} />
           </Field>
-          <Field label="Motivo de la consulta" required>
-            <Input value={reason} onChangeText={setReason} placeholder="Ej: vacunación, control, cirugía" />
-          </Field>
-          <Field label="Veterinario">
-            <Segmented
-              value={vetId}
-              onChange={setVetId}
-              options={[
-                { value: 'none', label: 'Sin asignar' },
-                ...vets.map((v) => ({ value: v.id, label: `${v.first_name} ${v.last_name}`.trim() || 'Usuario' })),
-              ]}
-            />
-          </Field>
-          <Field label="Notas">
-            <Input value={notes} onChangeText={setNotes} multiline />
-          </Field>
+        </FormRow>
+        <Field label="Duración (minutos)">
+          <Segmented value={duration} onChange={setDuration} options={DURATIONS.map((d) => ({ value: d, label: d }))} />
+        </Field>
+        <Field label="Motivo de la consulta" required>
+          <Input value={reason} onChangeText={setReason} placeholder="Ej: vacunación, control, cirugía" />
+        </Field>
+        <Field label="Veterinario">
+          <Segmented
+            value={vetId}
+            onChange={setVetId}
+            options={[
+              { value: 'none', label: 'Sin asignar' },
+              ...vets.map((v) => ({ value: v.id, label: `${v.first_name} ${v.last_name}`.trim() || 'Usuario' })),
+            ]}
+          />
+        </Field>
+        <Field label="Notas">
+          <Input value={notes} onChangeText={setNotes} multiline />
+        </Field>
 
-          {warning ? <Txt style={{ color: '#b45309' }}>{warning}</Txt> : null}
-          {error ? <ErrorBox message={error} /> : null}
+        {error ? <ErrorBox message={error} /> : null}
 
-          <Row style={{ justifyContent: 'flex-end' }}>
-            <Button title="Cancelar" variant="ghost" onPress={() => router.back()} />
-            <Button title="Guardar turno" icon="content-save-outline" onPress={save} loading={saving} />
-          </Row>
-        </Card>
-      )}
+        <Row style={{ justifyContent: 'flex-end' }}>
+          <Button title="Cancelar" variant="ghost" onPress={() => router.back()} />
+          <Button title="Guardar turno" icon="content-save-outline" onPress={save} loading={saving} />
+        </Row>
+      </Card>
     </Screen>
   );
 }

@@ -2,6 +2,8 @@ import type { Session } from '@supabase/supabase-js';
 import { createContext, use, useCallback, useEffect, useState, type PropsWithChildren } from 'react';
 
 import { isSupabaseConfigured, supabase } from './supabase';
+import { clearMirror } from './offline';
+import { clearQueryCache } from './use-query';
 import type { Profile } from './types';
 
 type AuthState = {
@@ -91,6 +93,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
     },
     async signOut() {
       await supabase.auth.signOut();
+      clearQueryCache();
+      // La copia local tiene datos personales de clientes: no se deja en el dispositivo.
+      await clearMirror();
       setProfile(null);
     },
     refreshProfile: () => loadProfile(session?.user.id),

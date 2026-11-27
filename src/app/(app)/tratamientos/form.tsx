@@ -1,8 +1,9 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 
-import { Button, Card, DateInput, ErrorBox, Field, FormRow, Input, Loading, Row, Screen } from '@/components/ui';
+import { Button, Card, DateInput, ErrorBox, Field, FormRow, Input, Row, Screen } from '@/components/ui';
 import { fmtDate, inputToDbDate } from '@/lib/dates';
+import { toast } from '@/lib/dialogs';
 import { supabase } from '@/lib/supabase';
 import { space } from '@/lib/theme';
 import type { Treatment } from '@/lib/types';
@@ -83,7 +84,11 @@ export default function TreatmentFormScreen() {
       ? await supabase.from('treatments').update(payload).eq('id', id)
       : await supabase.from('treatments').insert(payload);
     setSaving(false);
-    if (res.error) return setError(res.error.message);
+    if (res.error) {
+      toast.error('No se pudo guardar el tratamiento', res.error.message);
+      return setError(res.error.message);
+    }
+    toast.success(id ? 'Tratamiento actualizado' : 'Tratamiento registrado', payload.name);
     router.back();
   }
 
@@ -92,45 +97,42 @@ export default function TreatmentFormScreen() {
       title={id ? 'Editar tratamiento' : 'Nuevo tratamiento'}
       subtitle={linkedConsultation ? 'Asociado a una consulta' : undefined}
       back
+      loading={loading}
     >
-      {loading ? (
-        <Loading />
-      ) : (
-        <Card style={{ gap: space.lg }}>
-          <Field label="Medicamento o tratamiento" required>
-            <Input value={form.name} onChangeText={set('name')} placeholder="Ej: Amoxicilina 250 mg" />
+      <Card style={{ gap: space.lg }}>
+        <Field label="Medicamento o tratamiento" required>
+          <Input value={form.name} onChangeText={set('name')} placeholder="Ej: Amoxicilina 250 mg" />
+        </Field>
+        <FormRow>
+          <Field label="Dosis">
+            <Input value={form.dose} onChangeText={set('dose')} placeholder="Ej: 1 comprimido" />
           </Field>
-          <FormRow>
-            <Field label="Dosis">
-              <Input value={form.dose} onChangeText={set('dose')} placeholder="Ej: 1 comprimido" />
-            </Field>
-            <Field label="Frecuencia">
-              <Input value={form.frequency} onChangeText={set('frequency')} placeholder="Ej: cada 12 hs" />
-            </Field>
-            <Field label="Duración">
-              <Input value={form.duration} onChangeText={set('duration')} placeholder="Ej: 7 días" />
-            </Field>
-          </FormRow>
-          <FormRow>
-            <Field label="Fecha de inicio">
-              <DateInput value={form.start_date} onChangeText={set('start_date')} />
-            </Field>
-            <Field label="Fecha de finalización">
-              <DateInput value={form.end_date} onChangeText={set('end_date')} />
-            </Field>
-          </FormRow>
-          <Field label="Indicaciones adicionales">
-            <Input value={form.instructions} onChangeText={set('instructions')} multiline />
+          <Field label="Frecuencia">
+            <Input value={form.frequency} onChangeText={set('frequency')} placeholder="Ej: cada 12 hs" />
           </Field>
+          <Field label="Duración">
+            <Input value={form.duration} onChangeText={set('duration')} placeholder="Ej: 7 días" />
+          </Field>
+        </FormRow>
+        <FormRow>
+          <Field label="Fecha de inicio">
+            <DateInput value={form.start_date} onChangeText={set('start_date')} />
+          </Field>
+          <Field label="Fecha de finalización">
+            <DateInput value={form.end_date} onChangeText={set('end_date')} />
+          </Field>
+        </FormRow>
+        <Field label="Indicaciones adicionales">
+          <Input value={form.instructions} onChangeText={set('instructions')} multiline />
+        </Field>
 
-          {error ? <ErrorBox message={error} /> : null}
+        {error ? <ErrorBox message={error} /> : null}
 
-          <Row style={{ justifyContent: 'flex-end' }}>
-            <Button title="Cancelar" variant="ghost" onPress={() => router.back()} />
-            <Button title="Guardar" icon="content-save-outline" onPress={save} loading={saving} />
-          </Row>
-        </Card>
-      )}
+        <Row style={{ justifyContent: 'flex-end' }}>
+          <Button title="Cancelar" variant="ghost" onPress={() => router.back()} />
+          <Button title="Guardar" icon="content-save-outline" onPress={save} loading={saving} />
+        </Row>
+      </Card>
     </Screen>
   );
 }

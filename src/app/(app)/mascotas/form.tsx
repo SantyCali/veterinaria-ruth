@@ -10,13 +10,13 @@ import {
   Field,
   FormRow,
   Input,
-  Loading,
   Row,
   Screen,
   Segmented,
   Txt,
 } from '@/components/ui';
 import { fmtDate, inputToDbDate } from '@/lib/dates';
+import { toast } from '@/lib/dialogs';
 import { speciesOptions } from '@/lib/labels';
 import { supabase } from '@/lib/supabase';
 import { space } from '@/lib/theme';
@@ -106,88 +106,91 @@ export default function PetFormScreen() {
       ? await supabase.from('pets').update(payload).eq('id', id).select('id').single()
       : await supabase.from('pets').insert(payload).select('id').single();
     setSaving(false);
-    if (res.error) return setError(res.error.message);
+    if (res.error) {
+      toast.error('No se pudo guardar la mascota', res.error.message);
+      return setError(res.error.message);
+    }
+    toast.success(
+      id ? 'Mascota actualizada' : 'Mascota registrada',
+      ownerChanged ? `${payload.name} · se cambió el dueño (el historial se conserva)` : payload.name,
+    );
     router.replace(`/mascotas/${res.data.id}`);
   }
 
   const ownerChanged = !!id && (client?.id ?? null) !== originalClientId;
 
   return (
-    <Screen title={id ? 'Editar mascota' : 'Nueva mascota'} back>
-      {loading ? (
-        <Loading />
-      ) : (
-        <Card style={{ gap: space.lg }}>
-          <FormRow>
-            <Field label="Nombre" required>
-              <Input value={name} onChangeText={setName} />
-            </Field>
-            <Field label="Raza">
-              <Input value={breed} onChangeText={setBreed} placeholder="Ej: Golden Retriever, mestizo" />
-            </Field>
-          </FormRow>
-
-          <Field label="Especie" required>
-            <Segmented value={species} onChange={setSpecies} options={speciesOptions} />
+    <Screen title={id ? 'Editar mascota' : 'Nueva mascota'} back loading={loading}>
+      <Card style={{ gap: space.lg }}>
+        <FormRow>
+          <Field label="Nombre" required>
+            <Input value={name} onChangeText={setName} />
           </Field>
-
-          <FormRow>
-            <Field label="Fecha de nacimiento" hint="Aproximada si no se sabe">
-              <DateInput value={birth} onChangeText={setBirth} />
-            </Field>
-            <Field label="Sexo">
-              <Segmented<PetSex>
-                value={sex}
-                onChange={setSex}
-                options={[
-                  { value: 'macho', label: 'Macho' },
-                  { value: 'hembra', label: 'Hembra' },
-                ]}
-              />
-            </Field>
-            <Field label="Esterilizado">
-              <Segmented<'si' | 'no'>
-                value={sterilized}
-                onChange={setSterilized}
-                options={[
-                  { value: 'si', label: 'Sí' },
-                  { value: 'no', label: 'No' },
-                ]}
-              />
-            </Field>
-          </FormRow>
-
-          <Field label="Dueño / tutor" hint="Puede quedar sin dueño (rescatada, en adopción o de la veterinaria)">
-            <ClientPicker value={client} onChange={setClient} allowNone />
+          <Field label="Raza">
+            <Input value={breed} onChangeText={setBreed} placeholder="Ej: Golden Retriever, mestizo" />
           </Field>
-          {ownerChanged ? (
-            <Txt variant="small">
-              Al guardar se cambia el dueño. El historial clínico se conserva y el dueño anterior queda
-              registrado en el historial de dueños.
-            </Txt>
-          ) : null}
+        </FormRow>
 
-          <FormRow>
-            <Field label="Microchip">
-              <Input value={microchip} onChangeText={setMicrochip} />
-            </Field>
-            <Field label="Alergias / alertas médicas">
-              <Input value={allergies} onChangeText={setAllergies} placeholder="Ej: penicilina" />
-            </Field>
-          </FormRow>
+        <Field label="Especie" required>
+          <Segmented value={species} onChange={setSpecies} options={speciesOptions} />
+        </Field>
 
-          <Field label="Notas">
-            <Input value={notes} onChangeText={setNotes} multiline />
+        <FormRow>
+          <Field label="Fecha de nacimiento" hint="Aproximada si no se sabe">
+            <DateInput value={birth} onChangeText={setBirth} />
           </Field>
+          <Field label="Sexo">
+            <Segmented<PetSex>
+              value={sex}
+              onChange={setSex}
+              options={[
+                { value: 'macho', label: 'Macho' },
+                { value: 'hembra', label: 'Hembra' },
+              ]}
+            />
+          </Field>
+          <Field label="Esterilizado">
+            <Segmented<'si' | 'no'>
+              value={sterilized}
+              onChange={setSterilized}
+              options={[
+                { value: 'si', label: 'Sí' },
+                { value: 'no', label: 'No' },
+              ]}
+            />
+          </Field>
+        </FormRow>
 
-          {error ? <ErrorBox message={error} /> : null}
+        <Field label="Dueño / tutor" hint="Puede quedar sin dueño (rescatada, en adopción o de la veterinaria)">
+          <ClientPicker value={client} onChange={setClient} allowNone />
+        </Field>
+        {ownerChanged ? (
+          <Txt variant="small">
+            Al guardar se cambia el dueño. El historial clínico se conserva y el dueño anterior queda
+            registrado en el historial de dueños.
+          </Txt>
+        ) : null}
 
-          <Row style={{ justifyContent: 'flex-end' }}>
-            <Button title="Cancelar" variant="ghost" onPress={() => router.back()} />
-            <Button title="Guardar" icon="content-save-outline" onPress={save} loading={saving} />
-          </Row>
-        </Card>
-      )}
+        <FormRow>
+          <Field label="Microchip">
+            <Input value={microchip} onChangeText={setMicrochip} />
+          </Field>
+          <Field label="Alergias / alertas médicas">
+            <Input value={allergies} onChangeText={setAllergies} placeholder="Ej: penicilina" />
+          </Field>
+        </FormRow>
+
+        <Field label="Notas">
+          <Input value={notes} onChangeText={setNotes} multiline />
+        </Field>
+
+        {error ? <ErrorBox message={error} /> : null}
+
+        <Row style={{ justifyContent: 'flex-end' }}>
+          <Button title="Cancelar" variant="ghost" onPress={() => router.back()} />
+          <Button title="Guardar" icon="content-save-outline" onPress={save} loading={saving} />
+        </Row>
+      </Card>
     </Screen>
   );
 }

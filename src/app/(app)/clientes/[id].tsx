@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Linking, Pressable, View } from 'react-native';
 
+import { PetAvatar } from '@/components/pet-avatar';
 import { APPOINTMENT_SELECT, AppointmentRow } from '@/components/rows';
 import {
   Avatar,
@@ -13,7 +14,6 @@ import {
   Icon,
   initials,
   ListItem,
-  Loading,
   Row,
   Screen,
   SectionTitle,
@@ -21,12 +21,14 @@ import {
   type IconName,
 } from '@/components/ui';
 import { fmtAge } from '@/lib/dates';
-import { confirm } from '@/lib/dialogs';
-import { clientStatus, petStatus, speciesIcon, speciesLabel } from '@/lib/labels';
+import { confirm, toast } from '@/lib/dialogs';
+import { clientStatus, petStatus, speciesLabel } from '@/lib/labels';
 import { supabase } from '@/lib/supabase';
 import { colors, space } from '@/lib/theme';
 import type { AppointmentFull, Client, Pet } from '@/lib/types';
 import { useQuery } from '@/lib/use-query';
+import { clientDetailOffline } from '@/lib/offline-queries';
+import { openWhatsApp } from '@/lib/whatsapp';
 
 type Detail = { client: Client; pets: Pet[]; appointments: AppointmentFull[] };
 
@@ -50,7 +52,7 @@ export default function ClientDetailScreen() {
       error: err,
       data: err ? null : { client: c.data as Client, pets: p.data as Pet[], appointments: a.data as AppointmentFull[] },
     };
-  }, [id]);
+  }, [id], 'cliente', (m) => clientDetailOffline(m, id));
 
   async function toggleActive() {
     if (!data) return;
@@ -60,16 +62,18 @@ export default function ClientDetailScreen() {
       deactivate
         ? 'El cliente queda inactivo. No se borra nada: sus mascotas, historias clínicas y turnos se conservan.'
         : 'El cliente vuelve a estar activo.',
-      deactivate ? 'Desactivar' : 'Reactivar',
+      { okText: deactivate ? 'Desactivar' : 'Reactivar', danger: deactivate },
     );
     if (!ok) return;
     setBusy(true);
-    await supabase.from('clients').update({ active: !deactivate }).eq('id', id);
+    const { error: err } = await supabase.from('clients').update({ active: !deactivate }).eq('id', id);
     setBusy(false);
+    if (err) toast.error('No se pudo actualizar el cliente', err.message);
+    else toast.success(deactivate ? 'Cliente desactivado' : 'Cliente reactivado');
     reload();
   }
 
-  if (loading && !data) return <Screen title="Cliente" back><Loading /></Screen>;
+  if (loading && !data) return <Screen title="Cliente" back loading />;
   if (error || !data) return <Screen title="Cliente" back><ErrorBox message={error ?? 'No encontrado'} /></Screen>;
 
   const { client, pets, appointments } = data;
@@ -82,6 +86,15 @@ export default function ClientDetailScreen() {
       back
       actions={
         <>
+          {client.phone ? (
+            <Button
+              title="WhatsApp"
+              icon="whatsapp"
+              variant="secondary"
+              small
+              onPress={() => openWhatsApp(client.phone, `¡Hola ${client.first_name}! Te escribimos de Veterinaria Ruth. `)}
+            />
+          ) : null}
           <Button title="Editar" icon="pencil-outline" variant="secondary" small onPress={() => router.push({ pathname: '/clientes/form', params: { id } })} />
           <Button
             title={client.active ? 'Desactivar' : 'Reactivar'}
@@ -126,7 +139,7 @@ export default function ClientDetailScreen() {
           return (
             <ListItem
               key={p.id}
-              left={<Avatar icon={speciesIcon[p.species]} />}
+              left={<PetAvatar path={p.photo_path} species={p.species} />}
               title={p.name}
               subtitle={[speciesLabel[p.species], p.breed, fmtAge(p.birth_date)].filter(Boolean).join(' · ')}
               right={

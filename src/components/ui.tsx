@@ -1,8 +1,17 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { createContext, useContext, type ComponentProps, type ReactNode } from 'react';
+import {
+  Children,
+  createContext,
+  isValidElement,
+  useContext,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from 'react';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,7 +25,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { maskDateInput, maskTimeInput } from '@/lib/dates';
+import { FadeIn, staggerDelay } from './motion';
+import { DatePickerModal } from './date-picker';
+import { fmtDate, inputToDbDate, maskDateInput, maskTimeInput, parseDbDate } from '@/lib/dates';
 import { colors, fonts, radius, space } from '@/lib/theme';
 
 export type IconName = ComponentProps<typeof MaterialCommunityIcons>['name'];
@@ -74,13 +85,21 @@ export function Screen({
   actions,
   children,
   scroll = true,
+  loading = false,
 }: {
   title?: string;
   subtitle?: string;
   back?: boolean;
   actions?: ReactNode;
-  children: ReactNode;
+  children?: ReactNode;
   scroll?: boolean;
+  /**
+   * Mientras sea true se muestra solo el encabezado y un indicador de carga.
+   * El contenido se monta (y entra en cascada) recién cuando llegan los datos,
+   * así no se anima vacío ni pega un salto al cargarse.
+   * Pasar `loading && !data` para que las recargas en segundo plano no lo oculten.
+   */
+  loading?: boolean;
 }) {
   const header = title ? (
     <View style={s.header}>
@@ -104,21 +123,31 @@ export function Screen({
     </View>
   ) : null;
 
+  // Entrada en cascada: primero el encabezado y después cada bloque de la pantalla.
+  const content = (
+    <>
+      {header ? <FadeIn distance={8}>{header}</FadeIn> : null}
+      {loading ? (
+        <Loading />
+      ) : (
+        Children.toArray(children).map((child, i) => (
+          <FadeIn key={isValidElement(child) && child.key != null ? child.key : i} delay={staggerDelay(i + 1)}>
+            {child}
+          </FadeIn>
+        ))
+      )}
+    </>
+  );
+
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
       {scroll ? (
         <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
-          <View style={s.inner}>
-            {header}
-            {children}
-          </View>
+          <View style={s.inner}>{content}</View>
         </ScrollView>
       ) : (
         <View style={[s.scroll, { flex: 1 }]}>
-          <View style={[s.inner, { flex: 1 }]}>
-            {header}
-            {children}
-          </View>
+          <View style={[s.inner, { flex: 1 }]}>{content}</View>
         </View>
       )}
     </SafeAreaView>
@@ -275,12 +304,29 @@ export function Field({
 }
 
 export function Input(props: TextInputProps & { invalid?: boolean }) {
-  const { style, multiline, invalid, ...rest } = props;
+  const { style, multiline, invalid, onFocus, onBlur, ...rest } = props;
+  const [focused, setFocused] = useState(false);
   return (
     <TextInput
       placeholderTextColor={colors.textSubtle}
       multiline={multiline}
-      style={[s.input, multiline && s.inputMulti, invalid && { borderColor: colors.danger }, style]}
+      onFocus={(e) => {
+        setFocused(true);
+        onFocus?.(e);
+      }}
+      onBlur={(e) => {
+        setFocused(false);
+        onBlur?.(e);
+      }}
+      // En web se saca el recuadro del navegador: el foco se marca con el borde verde.
+      style={[
+        s.input,
+        NO_FOCUS_RING,
+        multiline && s.inputMulti,
+        focused && s.inputFocused,
+        invalid && { borderColor: colors.danger },
+        style,
+      ]}
       {...rest}
     />
   );
@@ -292,17 +338,36 @@ type MaskedInputProps = Omit<TextInputProps, 'value' | 'onChangeText'> & {
 };
 
 /** Fecha DD/MM/AAAA: se escriben solo los números y las barras se ponen solas. */
-export function DateInput({ value, onChangeText, ...rest }: MaskedInputProps) {
+export function DateInput({ value, onChangeText, style, ...rest }: MaskedInputProps) {
+  const [open, setOpen] = useState(false);
+  const typed = inputToDbDate(value);
   return (
-    <Input
-      placeholder="DD/MM/AAAA"
-      {...rest}
-      value={value}
-      onChangeText={(t) => onChangeText(maskDateInput(t, value))}
-      keyboardType="number-pad"
-      inputMode="numeric"
-      maxLength={10}
-    />
+    <View style={s.dateWrap}>
+      <Input
+        placeholder="DD/MM/AAAA"
+        {...rest}
+        style={[{ flex: 1, paddingRight: 44 }, style]}
+        value={value}
+        onChangeText={(t) => onChangeText(maskDateInput(t, value))}
+        keyboardType="number-pad"
+        inputMode="numeric"
+        maxLength={10}
+      />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Abrir calendario"
+        onPress={() => setOpen(true)}
+        style={s.dateBtn}
+      >
+        <Icon name="calendar-month-outline" size={20} color={colors.primary} />
+      </Pressable>
+      <DatePickerModal
+        visible={open}
+        value={typed ? parseDbDate(typed) : null}
+        onClose={() => setOpen(false)}
+        onSelect={(d) => onChangeText(fmtDate(d))}
+      />
+    </View>
   );
 }
 
@@ -368,16 +433,19 @@ export function SearchBar({
   onChangeText: (t: string) => void;
   placeholder: string;
 }) {
+  const [focused, setFocused] = useState(false);
   return (
-    <View style={s.search}>
-      <Icon name="magnify" size={20} color={colors.textSubtle} />
+    <View style={[s.search, focused && s.inputFocused]}>
+      <Icon name="magnify" size={20} color={focused ? colors.primary : colors.textSubtle} />
       <TextInput
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={colors.textSubtle}
-        style={s.searchInput}
+        style={[s.searchInput, NO_FOCUS_RING]}
         autoCorrect={false}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
       />
       {value ? (
         <Pressable accessibilityLabel="Borrar búsqueda" onPress={() => onChangeText('')}>
@@ -484,24 +552,36 @@ export function StatCard({
   value,
   detail,
   tone = colors.primary,
+  index = 0,
 }: {
   icon: IconName;
   label: string;
   value: string | number;
   detail?: string;
   tone?: string;
+  /** Posición en la fila, para que las tarjetas entren una detrás de otra. */
+  index?: number;
 }) {
   return (
-    <Card style={{ flex: 1, minWidth: 160, gap: space.sm }}>
-      <View style={[s.statIcon, { backgroundColor: colors.surfaceAlt }]}>
-        <Icon name={icon} size={20} color={tone} />
-      </View>
-      <Txt variant="label">{label}</Txt>
-      <Text style={[s.statValue, { color: colors.text }]}>{value}</Text>
-      {detail ? <Txt variant="small">{detail}</Txt> : null}
-    </Card>
+    <FadeIn delay={staggerDelay(index, 140)} variant="pop" style={{ flex: 1, minWidth: 160 }}>
+      <Card style={{ flex: 1, gap: space.sm }}>
+        <View style={[s.statIcon, { backgroundColor: colors.surfaceAlt }]}>
+          <Icon name={icon} size={20} color={tone} />
+        </View>
+        <Txt variant="label">{label}</Txt>
+        <Text style={[s.statValue, { color: colors.text }]}>{value}</Text>
+        {detail ? <Txt variant="small">{detail}</Txt> : null}
+      </Card>
+    </FadeIn>
   );
 }
+
+/**
+ * Saca el recuadro de foco que dibuja el navegador (Chrome lo muestra aunque el ancho sea 0
+ * si el estilo es "auto"). Solo en web; el foco se sigue viendo con el borde verde.
+ * Los tipos de React Native no incluyen 'none', por eso el cast.
+ */
+export const NO_FOCUS_RING = (Platform.OS === 'web' ? { outlineStyle: 'none' } : {}) as TextStyle;
 
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
@@ -566,7 +646,19 @@ const s = StyleSheet.create({
     paddingVertical: 10,
   },
   inputMulti: { minHeight: 84, textAlignVertical: 'top' },
+  // Foco visible y prolijo: borde verde de la app en lugar del recuadro negro del navegador.
+  inputFocused: { borderColor: colors.primary },
   formRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.lg },
+  dateWrap: { flexDirection: 'row', alignItems: 'center' },
+  dateBtn: {
+    position: 'absolute',
+    right: 4,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   seg: {
     paddingHorizontal: 14,
     paddingVertical: 8,

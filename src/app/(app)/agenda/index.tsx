@@ -12,7 +12,6 @@ import {
   Icon,
   IconButton,
   Input,
-  Loading,
   Row,
   Screen,
   SectionTitle,
@@ -21,16 +20,21 @@ import {
   Txt,
 } from '@/components/ui';
 import { addDays, fmtDateTime, fmtLongDate, fmtTime, inputToDateTime, fmtDate, sameDay, startOfDay, toDbDate } from '@/lib/dates';
-import { confirm } from '@/lib/dialogs';
+import { useAuth } from '@/lib/auth';
+import { confirm, toast } from '@/lib/dialogs';
 import { taskKind } from '@/lib/labels';
 import { supabase } from '@/lib/supabase';
 import { colors, radius, space } from '@/lib/theme';
 import type { DailyNote, Task, TaskKind } from '@/lib/types';
 import { useQuery } from '@/lib/use-query';
+import { agendaOffline } from '@/lib/offline-queries';
+import { openWhatsApp, whatsappTemplates } from '@/lib/whatsapp';
 
 type AgendaData = { tasks: Task[]; notes: DailyNote[] };
 
 export default function AgendaScreen() {
+  const { profile } = useAuth();
+  const myPhone = profile?.phone ?? null;
   const [day, setDay] = useState(() => startOfDay(new Date()));
   const [title, setTitle] = useState('');
   const [kind, setKind] = useState<TaskKind>('tarea');
@@ -51,11 +55,11 @@ export default function AgendaScreen() {
         // Las del día + todas las pendientes (para ver vencidas y sin fecha).
         .or(`and(due_at.gte.${from},due_at.lt.${to}),completed_at.is.null`)
         .order('due_at', { ascending: true, nullsFirst: false }),
-      supabase.from('daily_notes').select('*').eq('note_date', toDbDate(day)).order('created_at'),
+      supabase.from('daily_notes').select('*').eq('note_date', toDbDate(day)).eq('active', true).order('created_at'),
     ]);
     const err = tasks.error ?? notes.error;
     return { error: err, data: err ? null : { tasks: tasks.data as Task[], notes: notes.data as DailyNote[] } };
-  }, [day.getTime()]);
+  }, [day.getTime()], 'agenda', (m) => agendaOffline(m, day));
 
   const tasks = data?.tasks ?? [];
   const now = new Date();
@@ -83,7 +87,11 @@ export default function AgendaScreen() {
       .from('tasks')
       .insert({ title: title.trim(), kind, due_at: due, description: description.trim() || null });
     setSaving(false);
-    if (err) return setFormError(err.message);
+    if (err) {
+      toast.error('No se pudo agregar', err.message);
+      return setFormError(err.message);
+    }
+    toast.success(`${taskKind[kind].label} agregada a la agenda`, title.trim());
     setTitle('');
     setTime('');
     setDescription('');
@@ -91,23 +99,48 @@ export default function AgendaScreen() {
   }
 
   async function toggle(t: Task) {
-    await supabase
+    const done = !t.completed_at;
+    const { error: err } = await supabase
       .from('tasks')
-      .update({ completed_at: t.completed_at ? null : new Date().toISOString() })
+      .update({ completed_at: done ? new Date().toISOString() : null })
       .eq('id', t.id);
+    if (err) toast.error('No se pudo actualizar', err.message);
+    else if (done) toast.success('¡Completada!', t.title);
     reload();
   }
 
   async function archive(t: Task) {
-    const ok = await confirm('Quitar de la agenda', `"${t.title}" deja de mostrarse (no se borra).`, 'Quitar');
+    const ok = await confirm('Quitar de la agenda', `"${t.title}" deja de mostrarse (no se borra).`, {
+      okText: 'Quitar',
+      danger: true,
+    });
     if (!ok) return;
-    await supabase.from('tasks').update({ active: false }).eq('id', t.id);
+    const { error: err } = await supabase.from('tasks').update({ active: false }).eq('id', t.id);
+    if (err) toast.error('No se pudo quitar', err.message);
+    else toast.info('Quitada de la agenda', t.title);
+    reload();
+  }
+
+  async function deleteNote(n: DailyNote) {
+    const ok = await confirm('Borrar nota', `"${n.content.slice(0, 80)}" se va a borrar de la agenda.`, {
+      okText: 'Borrar',
+      danger: true,
+    });
+    if (!ok) return;
+    // Baja lógica: se oculta, pero queda guardada en la base.
+    const { error: err } = await supabase.from('daily_notes').update({ active: false }).eq('id', n.id);
+    if (err) return toast.error('No se pudo borrar la nota', err.message);
+    toast.success('Nota borrada');
     reload();
   }
 
   async function addNote() {
-    if (!note.trim()) return;
-    await supabase.from('daily_notes').insert({ note_date: toDbDate(day), content: note.trim() });
+    if (!note.trim()) return toast.warning('Escribí la nota antes de guardarla');
+    const { error: err } = await supabase
+      .from('daily_notes')
+      .insert({ note_date: toDbDate(day), content: note.trim() });
+    if (err) return toast.error('No se pudo guardar la nota', err.message);
+    toast.success('Nota guardada');
     setNote('');
     reload();
   }
@@ -116,9 +149,10 @@ export default function AgendaScreen() {
 
   return (
     <Screen
+      loading={loading && !data}
       title="Agenda del día"
       subtitle="Tareas, recordatorios, actividades y notas (independiente de los turnos)"
-      actions={<Button title="Mi perfil" icon="account-cog-outline" variant="secondary" small onPress={() => router.navigate('/perfil')} />}
+      actions={<Button title="Mi perfil" icon="account-cog-outline" variant="secondary" small onPress={() => router.dismissTo('/perfil')} />}
     >
       <Card>
         <Row style={{ justifyContent: 'center' }}>
@@ -162,13 +196,12 @@ export default function AgendaScreen() {
             <Button title="Agregar a la agenda" icon="plus" onPress={addTask} loading={saving} style={{ alignSelf: 'flex-start' }} />
           </Card>
 
-          {loading && !data ? <Loading /> : null}
 
           {overdue.length > 0 && (
             <Card style={{ gap: space.sm, borderLeftWidth: 4, borderLeftColor: colors.danger }}>
               <SectionTitle title={`Vencidas (${overdue.length})`} />
               {overdue.map((t) => (
-                <TaskItem key={t.id} t={t} onToggle={toggle} onArchive={archive} showDate />
+                <TaskItem key={t.id} t={t} onToggle={toggle} onArchive={archive} myPhone={myPhone} showDate />
               ))}
             </Card>
           )}
@@ -177,7 +210,7 @@ export default function AgendaScreen() {
             <SectionTitle title={`Del día (${ofDay.length})`} />
             {ofDay.length === 0 ? <Txt variant="muted">Nada programado para este día.</Txt> : null}
             {ofDay.map((t) => (
-              <TaskItem key={t.id} t={t} onToggle={toggle} onArchive={archive} />
+              <TaskItem key={t.id} t={t} onToggle={toggle} onArchive={archive} myPhone={myPhone} />
             ))}
           </Card>
 
@@ -185,7 +218,7 @@ export default function AgendaScreen() {
             <SectionTitle title={`Pendientes sin fecha (${noDate.length})`} />
             {noDate.length === 0 ? <Txt variant="muted">No hay pendientes sin fecha.</Txt> : null}
             {noDate.map((t) => (
-              <TaskItem key={t.id} t={t} onToggle={toggle} onArchive={archive} />
+              <TaskItem key={t.id} t={t} onToggle={toggle} onArchive={archive} myPhone={myPhone} />
             ))}
           </Card>
         </View>
@@ -194,8 +227,11 @@ export default function AgendaScreen() {
           <SectionTitle title="Notas del día" />
           {(data?.notes ?? []).map((n) => (
             <View key={n.id} style={styles.note}>
-              <Txt>{n.content}</Txt>
-              <Txt variant="small">{fmtTime(n.created_at)}</Txt>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Txt>{n.content}</Txt>
+                <Txt variant="small">{fmtTime(n.created_at)}</Txt>
+              </View>
+              <IconButton icon="trash-can-outline" label="Borrar nota" onPress={() => deleteNote(n)} />
             </View>
           ))}
           {data?.notes.length === 0 ? <Txt variant="muted">Sin notas.</Txt> : null}
@@ -211,11 +247,14 @@ function TaskItem({
   t,
   onToggle,
   onArchive,
+  myPhone,
   showDate,
 }: {
   t: Task;
   onToggle: (t: Task) => void;
   onArchive: (t: Task) => void;
+  /** Teléfono del usuario: los recordatorios se los manda a sí mismo. */
+  myPhone: string | null;
   showDate?: boolean;
 }) {
   const k = taskKind[t.kind];
@@ -235,6 +274,15 @@ function TaskItem({
         {t.due_at ? <Txt variant="small">{showDate ? fmtDateTime(t.due_at) : fmtTime(t.due_at)}</Txt> : null}
         {t.description ? <Txt variant="small">{t.description}</Txt> : null}
       </View>
+      {t.kind === 'recordatorio' && !t.completed_at ? (
+        <IconButton
+          icon="whatsapp"
+          label="Enviarme este recordatorio por WhatsApp"
+          onPress={() =>
+            openWhatsApp(myPhone, whatsappTemplates.reminder({ title: t.title, dueAt: t.due_at, detail: t.description }))
+          }
+        />
+      ) : null}
       <IconButton icon="archive-outline" label="Quitar de la agenda" onPress={() => onArchive(t)} />
     </View>
   );
@@ -248,5 +296,13 @@ const styles = StyleSheet.create({
     padding: space.sm,
     borderRadius: radius.md,
   },
-  note: { gap: 2, padding: space.md, borderRadius: radius.md, backgroundColor: colors.surface },
+  note: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: space.sm,
+    padding: space.md,
+    paddingRight: space.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+  },
 });

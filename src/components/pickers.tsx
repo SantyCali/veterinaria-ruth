@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
+import { PetAvatar } from './pet-avatar';
 import { Avatar, Icon, initials, ListItem, SearchBar, Txt } from './ui';
 import { speciesIcon, speciesLabel } from '@/lib/labels';
 import { cleanSearch, supabase } from '@/lib/supabase';
@@ -130,7 +131,7 @@ export function PetPicker({
           {results.map((p) => (
             <ListItem
               key={p.id}
-              left={<Avatar icon={speciesIcon[p.species]} size={32} />}
+              left={<PetAvatar path={p.photo_path} species={p.species} size={32} />}
               title={p.name}
               subtitle={`${speciesLabel[p.species]}${p.breed ? ` · ${p.breed}` : ''} · ${
                 p.client ? `${p.client.first_name} ${p.client.last_name}` : 'Sin dueño'

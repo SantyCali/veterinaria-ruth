@@ -13,12 +13,12 @@ import {
   Icon,
   IconButton,
   Input,
-  Loading,
   Row,
   Screen,
   Segmented,
   Txt,
 } from '@/components/ui';
+import { DatePickerModal } from '@/components/date-picker';
 import {
   addDays,
   dayNameShort,
@@ -31,12 +31,14 @@ import {
   startOfMonth,
   startOfWeek,
 } from '@/lib/dates';
-import { notify } from '@/lib/dialogs';
+import { toast } from '@/lib/dialogs';
 import { appointmentStatus, speciesLabel } from '@/lib/labels';
 import { supabase } from '@/lib/supabase';
 import { colors, radius, space, WIDE_BREAKPOINT } from '@/lib/theme';
 import type { AppointmentFull, AppointmentStatus } from '@/lib/types';
 import { useQuery } from '@/lib/use-query';
+import { appointmentsOffline } from '@/lib/offline-queries';
+import { openWhatsApp, whatsappTemplates } from '@/lib/whatsapp';
 
 type View_ = 'dia' | 'semana' | 'mes';
 type StatusFilter = AppointmentStatus | 'todos';
@@ -63,6 +65,7 @@ export default function AppointmentsScreen() {
   const [anchor, setAnchor] = useState(() => new Date());
   const [status, setStatus] = useState<StatusFilter>('todos');
   const [selectedId, setSelectedId] = useState<string | null>(turno ?? null);
+  const [pickingDate, setPickingDate] = useState(false);
 
   // Si cambia el parámetro ?turno=..., seleccionar ese turno (ajuste de estado en render).
   const [prevTurno, setPrevTurno] = useState(turno);
@@ -98,7 +101,7 @@ export default function AppointmentsScreen() {
       .order('starts_at');
     if (status !== 'todos') q = q.eq('status', status);
     return q;
-  }, [from.getTime(), to.getTime(), status]);
+  }, [from.getTime(), to.getTime(), status], 'turnos', (m) => appointmentsOffline(m, from, to, status));
 
   const appts = useMemo(() => data ?? [], [data]);
   const selected = appts.find((a) => a.id === selectedId) ?? null;
@@ -124,7 +127,6 @@ export default function AppointmentsScreen() {
 
   const calendar = (
     <Card style={{ gap: space.md, flex: 1 }}>
-      {loading && !data ? <Loading /> : null}
       {view === 'dia' && <DayList appts={appts} onSelect={setSelectedId} />}
       {view === 'semana' &&
         (width >= WIDE_BREAKPOINT ? (
@@ -157,6 +159,7 @@ export default function AppointmentsScreen() {
 
   return (
     <Screen
+      loading={loading && !data}
       title="Turnos y calendario"
       actions={<Button title="Nuevo turno" icon="calendar-plus" variant="accent" onPress={() => router.push({ pathname: '/turnos/form', params: { date: fmtDate(anchor) } })} />}
     >
@@ -171,13 +174,21 @@ export default function AppointmentsScreen() {
               { value: 'mes', label: 'Mes' },
             ]}
           />
-          <Row>
+          <Row wrap>
             <IconButton icon="chevron-left" label="Anterior" onPress={() => move(-1)} />
             <Txt variant="h3" style={{ minWidth: 180, textAlign: 'center' }}>
               {title}
             </Txt>
             <IconButton icon="chevron-right" label="Siguiente" onPress={() => move(1)} />
             <Button title="Hoy" variant="secondary" small onPress={() => setAnchor(new Date())} />
+            <Button title="Ir a fecha" icon="calendar-search" variant="secondary" small onPress={() => setPickingDate(true)} />
+            <DatePickerModal
+              visible={pickingDate}
+              value={anchor}
+              title="Ir a fecha"
+              onClose={() => setPickingDate(false)}
+              onSelect={(d) => setAnchor(d)}
+            />
           </Row>
         </Row>
         <Row wrap gap={space.md}>
@@ -392,7 +403,15 @@ function AppointmentDetail({
     setBusy(true);
     const { error } = await supabase.from('appointments').update({ status, ...extra }).eq('id', appt.id);
     setBusy(false);
-    if (error) notify('No se pudo actualizar el turno', error.message);
+    if (error) toast.error('No se pudo actualizar el turno', error.message);
+    else {
+      const msg: Record<AppointmentStatus, string> = {
+        atendido: 'Turno marcado como atendido',
+        cancelado: 'Turno cancelado (queda en el historial)',
+        pendiente: 'El turno volvió a pendiente',
+      };
+      toast.success(msg[status], appt.pet?.name);
+    }
     setCancelling(false);
     onChanged();
   }
@@ -423,6 +442,26 @@ function AppointmentDetail({
         <Txt variant="label">Tutor responsable</Txt>
         <Txt variant="bodyStrong">{appt.client ? `${appt.client.first_name} ${appt.client.last_name}` : 'Sin dueño'}</Txt>
         {appt.client?.phone ? <Txt variant="small">{appt.client.phone}</Txt> : null}
+        {appt.client?.phone && appt.status === 'pendiente' ? (
+          <Button
+            title="Recordar turno por WhatsApp"
+            icon="whatsapp"
+            variant="secondary"
+            small
+            style={{ alignSelf: 'flex-start', marginTop: 6 }}
+            onPress={() =>
+              openWhatsApp(
+                appt.client?.phone,
+                whatsappTemplates.appointment({
+                  owner: appt.client?.first_name,
+                  pet: appt.pet?.name ?? 'tu mascota',
+                  startsAt: appt.starts_at,
+                  reason: appt.reason,
+                }),
+              )
+            }
+          />
+        ) : null}
       </View>
 
       <Row gap={space.sm}>

@@ -12,15 +12,14 @@ import {
   FormRow,
   Icon,
   Input,
-  Loading,
   Row,
   Screen,
   Segmented,
   TimeInput,
   Txt,
 } from '@/components/ui';
-import { fmtDate, fmtTime, inputToDateTime } from '@/lib/dates';
-import { notify } from '@/lib/dialogs';
+import { fmtDate, fmtTime, inputToDateTime, inputToDbDate } from '@/lib/dates';
+import { toast } from '@/lib/dialogs';
 import { pickAndUploadPetFile } from '@/lib/files';
 import { fileCategoryOptions } from '@/lib/labels';
 import { supabase } from '@/lib/supabase';
@@ -70,6 +69,7 @@ export default function ConsultationFormScreen() {
   const [error, setError] = useState<string | null>(null);
   const [category, setCategory] = useState<FileCategory>('laboratorio');
   const [uploading, setUploading] = useState(false);
+  const [fileDescription, setFileDescription] = useState('');
 
   useEffect(() => {
     async function load() {
@@ -142,94 +142,109 @@ export default function ConsultationFormScreen() {
       await supabase.from('appointments').update({ status: 'atendido' }).eq('id', linkedAppointment);
     }
     setSaving(false);
-    if (res.error) return setError(res.error.message);
+    if (res.error) {
+      toast.error('No se pudo guardar la consulta', res.error.message);
+      return setError(res.error.message);
+    }
+    toast.success(
+      id ? 'Consulta actualizada' : 'Consulta registrada',
+      linkedAppointment ? `${pet.name} · el turno quedó como atendido` : pet.name,
+    );
     router.replace(`/mascotas/${pet.id}`);
   }
 
   async function upload() {
     if (!id || !pet) return;
     setUploading(true);
-    const err = await pickAndUploadPetFile({ petId: pet.id, consultationId: id, category });
+    // La fecha del estudio es la de la consulta.
+    const res = await pickAndUploadPetFile({
+      petId: pet.id,
+      consultationId: id,
+      category,
+      description: fileDescription,
+      studyDate: inputToDbDate(date),
+    });
+    if (res.uploaded) setFileDescription('');
     setUploading(false);
-    notify(err ? 'No se pudo subir el archivo' : 'Archivo adjuntado a la consulta', err ?? undefined);
+    if (res.error) toast.error('No se pudo subir el archivo', res.error);
+    else if (res.uploaded) toast.success('Archivo adjuntado a la consulta', res.uploaded);
   }
 
   return (
-    <Screen title={id ? 'Editar consulta' : 'Nueva consulta'} subtitle={pet ? `Paciente: ${pet.name}` : undefined} back>
-      {loading ? (
-        <Loading />
-      ) : (
-        <Card style={{ gap: space.lg }}>
-          {!petId && !id && !appointmentId ? (
-            <Field label="Mascota" required>
-              <PetPicker value={pet} onChange={setPet} />
-            </Field>
-          ) : null}
-
-          <FormRow>
-            <Field label="Fecha" required>
-              <DateInput value={date} onChangeText={setDate} />
-            </Field>
-            <Field label="Hora" required>
-              <TimeInput value={time} onChangeText={setTime} />
-            </Field>
-            <Field label="Peso (kg)">
-              <Input value={weight} onChangeText={setWeight} keyboardType="decimal-pad" placeholder="Ej: 12,5" />
-            </Field>
-          </FormRow>
-
-          <Field label="Motivo de consulta" required>
-            <Input value={reason} onChangeText={setReason} placeholder="Ej: control anual, vómitos, vacunación" />
+    <Screen title={id ? 'Editar consulta' : 'Nueva consulta'} subtitle={pet ? `Paciente: ${pet.name}` : undefined} back loading={loading}>
+      <Card style={{ gap: space.lg }}>
+        {!petId && !id && !appointmentId ? (
+          <Field label="Mascota" required>
+            <PetPicker value={pet} onChange={setPet} />
           </Field>
+        ) : null}
 
-          <Pressable onPress={() => setShowMore(!showMore)}>
-            <Row>
-              <Icon name={showMore ? 'chevron-up' : 'chevron-down'} color={colors.primary} />
-              <Txt variant="bodyStrong" style={{ color: colors.primary }}>
-                Detalle clínico (opcional)
-              </Txt>
-            </Row>
-          </Pressable>
+        <FormRow>
+          <Field label="Fecha" required>
+            <DateInput value={date} onChangeText={setDate} />
+          </Field>
+          <Field label="Hora" required>
+            <TimeInput value={time} onChangeText={setTime} />
+          </Field>
+          <Field label="Peso (kg)">
+            <Input value={weight} onChangeText={setWeight} keyboardType="decimal-pad" placeholder="Ej: 12,5" />
+          </Field>
+        </FormRow>
 
-          {showMore && (
-            <View style={{ gap: space.lg }}>
-              {OPTIONAL.map(({ key, label }) => (
-                <Field key={key} label={label}>
-                  <Input
-                    value={fields[key]}
-                    onChangeText={(v) => setFields((f) => ({ ...f, [key]: v }))}
-                    multiline
-                  />
-                </Field>
-              ))}
-            </View>
-          )}
+        <Field label="Motivo de consulta" required>
+          <Input value={reason} onChangeText={setReason} placeholder="Ej: control anual, vómitos, vacunación" />
+        </Field>
 
-          {id ? (
-            <View style={{ gap: space.sm }}>
-              <Txt variant="bodyStrong">Adjuntar estudios a esta consulta</Txt>
-              <Segmented value={category} onChange={setCategory} options={fileCategoryOptions} />
-              <Button
-                title="Subir archivo"
-                icon="paperclip"
-                variant="secondary"
-                loading={uploading}
-                onPress={upload}
-                style={{ alignSelf: 'flex-start' }}
-              />
-            </View>
-          ) : (
-            <Txt variant="small">Podés adjuntar estudios una vez guardada la consulta (botón Editar).</Txt>
-          )}
-
-          {error ? <ErrorBox message={error} /> : null}
-
-          <Row style={{ justifyContent: 'flex-end' }}>
-            <Button title="Cancelar" variant="ghost" onPress={() => router.back()} />
-            <Button title="Guardar consulta" icon="content-save-outline" onPress={save} loading={saving} />
+        <Pressable onPress={() => setShowMore(!showMore)}>
+          <Row>
+            <Icon name={showMore ? 'chevron-up' : 'chevron-down'} color={colors.primary} />
+            <Txt variant="bodyStrong" style={{ color: colors.primary }}>
+              Detalle clínico (opcional)
+            </Txt>
           </Row>
-        </Card>
-      )}
+        </Pressable>
+
+        {showMore && (
+          <View style={{ gap: space.lg }}>
+            {OPTIONAL.map(({ key, label }) => (
+              <Field key={key} label={label}>
+                <Input
+                  value={fields[key]}
+                  onChangeText={(v) => setFields((f) => ({ ...f, [key]: v }))}
+                  multiline
+                />
+              </Field>
+            ))}
+          </View>
+        )}
+
+        {id ? (
+          <View style={{ gap: space.sm }}>
+            <Txt variant="bodyStrong">Adjuntar estudios a esta consulta</Txt>
+            <Segmented value={category} onChange={setCategory} options={fileCategoryOptions} />
+            <Field label="Descripción del estudio">
+              <Input value={fileDescription} onChangeText={setFileDescription} placeholder="Ej: hemograma completo" />
+            </Field>
+            <Button
+              title="Subir archivo"
+              icon="paperclip"
+              variant="secondary"
+              loading={uploading}
+              onPress={upload}
+              style={{ alignSelf: 'flex-start' }}
+            />
+          </View>
+        ) : (
+          <Txt variant="small">Podés adjuntar estudios una vez guardada la consulta (botón Editar).</Txt>
+        )}
+
+        {error ? <ErrorBox message={error} /> : null}
+
+        <Row style={{ justifyContent: 'flex-end' }}>
+          <Button title="Cancelar" variant="ghost" onPress={() => router.back()} />
+          <Button title="Guardar consulta" icon="content-save-outline" onPress={save} loading={saving} />
+        </Row>
+      </Card>
     </Screen>
   );
 }

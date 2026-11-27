@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { PetAvatar } from '@/components/pet-avatar';
 import { APPOINTMENT_SELECT, AppointmentRow } from '@/components/rows';
 import {
   Avatar,
@@ -9,26 +10,28 @@ import {
   Card,
   Chip,
   EmptyState,
+  DateInput,
   ErrorBox,
+  Field,
+  FormRow,
   Icon,
   initials,
+  Input,
   ListItem,
-  Loading,
   Row,
   Screen,
   SectionTitle,
   Segmented,
   Txt,
 } from '@/components/ui';
-import { fmtAge, fmtDate, fmtDateTime, toDbDate } from '@/lib/dates';
-import { confirm, notify } from '@/lib/dialogs';
-import { fmtSize, openPetFile, pickAndUploadPetFile } from '@/lib/files';
+import { fmtAge, fmtDate, fmtDateTime, inputToDbDate, toDbDate } from '@/lib/dates';
+import { confirm, toast } from '@/lib/dialogs';
+import { fmtSize, openPetFile, pickAndUploadPetFile, pickAndUploadPetPhoto } from '@/lib/files';
 import {
   fileCategoryLabel,
   fileCategoryOptions,
   petStatus,
   sexLabel,
-  speciesIcon,
   speciesLabel,
 } from '@/lib/labels';
 import { supabase } from '@/lib/supabase';
@@ -42,15 +45,19 @@ import type {
   PetStatus,
   PetWithClient,
   Treatment,
+  Vaccination,
 } from '@/lib/types';
 import { useQuery } from '@/lib/use-query';
+import { petDetailOffline } from '@/lib/offline-queries';
+import { latestPerVaccine, vaccineState, vaccineStateTone, vaccineSummary } from '@/lib/vaccines';
 
-type Tab = 'historia' | 'tratamientos' | 'estudios' | 'turnos' | 'duenos';
+type Tab = 'historia' | 'tratamientos' | 'vacunas' | 'estudios' | 'turnos' | 'duenos';
 
 type Detail = {
   pet: PetWithClient;
   consultations: ConsultationFull[];
   treatments: Treatment[];
+  vaccinations: Vaccination[];
   files: PetFile[];
   appointments: AppointmentFull[];
   owners: PetOwnerHistory[];
@@ -61,9 +68,12 @@ export default function PetProfileScreen() {
   const [tab, setTab] = useState<Tab>('historia');
   const [category, setCategory] = useState<FileCategory>('radiografia');
   const [uploading, setUploading] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [fileDescription, setFileDescription] = useState('');
+  const [studyDate, setStudyDate] = useState('');
 
   const { data, loading, error, reload } = useQuery<Detail>(async () => {
-    const [pet, cons, trt, files, appts, owners] = await Promise.all([
+    const [pet, cons, trt, vacs, files, appts, owners] = await Promise.all([
       supabase.from('pets').select('*, client:clients(id, first_name, last_name, phone)').eq('id', id).single(),
       supabase
         .from('consultations')
@@ -71,6 +81,7 @@ export default function PetProfileScreen() {
         .eq('pet_id', id)
         .order('consulted_at', { ascending: false }),
       supabase.from('treatments').select('*').eq('pet_id', id).order('start_date', { ascending: false, nullsFirst: false }),
+      supabase.from('vaccinations').select('*').eq('pet_id', id).eq('active', true).order('applied_on', { ascending: false }),
       supabase.from('pet_files').select('*').eq('pet_id', id).eq('active', true).order('created_at', { ascending: false }),
       supabase.from('appointments').select(APPOINTMENT_SELECT).eq('pet_id', id).order('starts_at', { ascending: false }),
       supabase
@@ -79,7 +90,7 @@ export default function PetProfileScreen() {
         .eq('pet_id', id)
         .order('started_at', { ascending: false }),
     ]);
-    const err = pet.error ?? cons.error ?? trt.error ?? files.error ?? appts.error ?? owners.error;
+    const err = pet.error ?? cons.error ?? trt.error ?? vacs.error ?? files.error ?? appts.error ?? owners.error;
     return {
       error: err,
       data: err
@@ -88,12 +99,13 @@ export default function PetProfileScreen() {
             pet: pet.data as PetWithClient,
             consultations: cons.data as ConsultationFull[],
             treatments: trt.data as Treatment[],
+            vaccinations: vacs.data as Vaccination[],
             files: files.data as PetFile[],
             appointments: appts.data as AppointmentFull[],
             owners: owners.data as PetOwnerHistory[],
           },
     };
-  }, [id]);
+  }, [id], 'mascota', (m) => petDetailOffline(m, id));
 
   async function changeStatus(status: PetStatus) {
     if (!data || status === data.pet.status) return;
@@ -103,33 +115,56 @@ export default function PetProfileScreen() {
       fallecida:
         'Se registra el fallecimiento con fecha de hoy. Su ficha, consultas, tratamientos y estudios se conservan para futuras consultas.',
     };
-    const ok = await confirm('Cambiar estado', messages[status], 'Confirmar');
+    const ok = await confirm('Cambiar estado', messages[status], {
+      okText: 'Confirmar',
+      danger: status !== 'activa',
+    });
     if (!ok) return;
     const { error: err } = await supabase
       .from('pets')
       .update({ status, deceased_at: status === 'fallecida' ? toDbDate(new Date()) : null })
       .eq('id', id);
-    if (err) notify('No se pudo cambiar el estado', err.message);
+    if (err) toast.error('No se pudo cambiar el estado', err.message);
+    else toast.success(`${data.pet.name} ahora está ${petStatus[status].label.toLowerCase()}`);
     reload();
   }
 
   async function upload() {
+    let studyDb: string | null = null;
+    if (studyDate.trim()) {
+      studyDb = inputToDbDate(studyDate);
+      if (!studyDb) return toast.warning('Revisá la fecha del estudio', 'Tiene que ser DD/MM/AAAA.');
+    }
     setUploading(true);
-    const err = await pickAndUploadPetFile({ petId: id, category });
+    const res = await pickAndUploadPetFile({ petId: id, category, description: fileDescription, studyDate: studyDb });
     setUploading(false);
-    if (err) notify('No se pudo subir el archivo', err);
+    if (res.error) toast.error('No se pudo subir el archivo', res.error);
+    else if (res.uploaded) {
+      toast.success('Archivo subido', res.uploaded);
+      setFileDescription('');
+      setStudyDate('');
+    }
+    reload();
+  }
+
+  async function changePhoto() {
+    setUploadingPhoto(true);
+    const res = await pickAndUploadPetPhoto(id);
+    setUploadingPhoto(false);
+    if (res.error) toast.error('No se pudo cambiar la foto', res.error);
+    else if (res.path) toast.success('Foto actualizada');
     reload();
   }
 
   async function open(file: PetFile) {
     const err = await openPetFile(file.storage_path);
-    if (err) notify('No se pudo abrir el archivo', err);
+    if (err) toast.error('No se pudo abrir el archivo', err);
   }
 
-  if (loading && !data) return <Screen title="Mascota" back><Loading /></Screen>;
+  if (loading && !data) return <Screen title="Mascota" back loading />;
   if (error || !data) return <Screen title="Mascota" back><ErrorBox message={error ?? 'No encontrada'} /></Screen>;
 
-  const { pet, consultations, treatments, files, appointments, owners } = data;
+  const { pet, consultations, treatments, vaccinations, files, appointments, owners } = data;
   const st = petStatus[pet.status];
   const deceased = pet.status === 'fallecida';
   const nextAppt = [...appointments]
@@ -140,6 +175,7 @@ export default function PetProfileScreen() {
   const tabs: { value: Tab; label: string }[] = [
     { value: 'historia', label: `Historia clínica (${consultations.length})` },
     { value: 'tratamientos', label: `Tratamientos (${treatments.length})` },
+    { value: 'vacunas', label: `Vacunas (${vaccinations.length})` },
     { value: 'estudios', label: `Estudios (${files.length})` },
     { value: 'turnos', label: `Turnos (${appointments.length})` },
     { value: 'duenos', label: 'Dueños' },
@@ -150,7 +186,18 @@ export default function PetProfileScreen() {
       {/* Encabezado */}
       <Card style={{ gap: space.lg }}>
         <Row wrap gap={space.lg} style={{ alignItems: 'flex-start' }}>
-          <Avatar icon={speciesIcon[pet.species]} size={88} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={pet.photo_path ? 'Cambiar foto' : 'Agregar foto'}
+            onPress={changePhoto}
+            disabled={uploadingPhoto}
+            style={styles.photo}
+          >
+            <PetAvatar path={pet.photo_path} species={pet.species} size={88} />
+            <View style={styles.photoBadge}>
+              <Icon name={uploadingPhoto ? 'loading' : 'camera'} size={14} color={colors.primaryText} />
+            </View>
+          </Pressable>
           <View style={{ flex: 1, minWidth: 240, gap: space.sm }}>
             <Row wrap gap={space.sm}>
               <Txt variant="h2">{pet.name}</Txt>
@@ -174,6 +221,7 @@ export default function PetProfileScreen() {
               <MiniStat label="Último peso" value={lastWeight ? `${lastWeight} kg` : '—'} />
               <MiniStat label="Próximo turno" value={nextAppt ? fmtDateTime(nextAppt.starts_at) : '—'} />
               <MiniStat label="Consultas" value={String(consultations.length)} />
+              <MiniStat label="Vacunas" value={vaccineSummary(vaccinations)} />
             </Row>
           </View>
 
@@ -288,6 +336,30 @@ export default function PetProfileScreen() {
         </Card>
       )}
 
+      {/* Vacunas */}
+      {tab === 'vacunas' && (
+        <Card style={{ gap: space.sm }}>
+          <SectionTitle
+            title="Plan de vacunas"
+            action={
+              !deceased ? (
+                <Button
+                  title="Registrar vacuna"
+                  icon="needle"
+                  variant="ghost"
+                  small
+                  onPress={() => router.push({ pathname: '/vacunas/form', params: { petId: id } })}
+                />
+              ) : undefined
+            }
+          />
+          {vaccinations.length === 0 ? <EmptyState icon="needle" text="Sin vacunas registradas." /> : null}
+          {vaccinations.map((v) => (
+            <VaccineLine key={v.id} v={v} isLatest={latestPerVaccine(vaccinations).some((l) => l.id === v.id)} />
+          ))}
+        </Card>
+      )}
+
       {/* Estudios */}
       {tab === 'estudios' && (
         <Card style={{ gap: space.md }}>
@@ -295,6 +367,14 @@ export default function PetProfileScreen() {
           <View style={{ gap: space.sm }}>
             <Txt variant="small">Tipo de estudio a subir:</Txt>
             <Segmented value={category} onChange={setCategory} options={fileCategoryOptions} />
+            <FormRow>
+              <Field label="Descripción">
+                <Input value={fileDescription} onChangeText={setFileDescription} placeholder="Ej: placa de tórax, perfil renal" />
+              </Field>
+              <Field label="Fecha del estudio" width={190}>
+                <DateInput value={studyDate} onChangeText={setStudyDate} />
+              </Field>
+            </FormRow>
             <Button
               title="Subir archivo (PDF, Excel o imagen)"
               icon="upload"
@@ -423,6 +503,31 @@ function ConsultationCard({
   );
 }
 
+function VaccineLine({ v, isLatest }: { v: Vaccination; isLatest: boolean }) {
+  // Solo la aplicación más reciente de cada vacuna define si está al día.
+  const tone = isLatest ? vaccineStateTone[vaccineState(v.next_due)] : null;
+  return (
+    <Pressable
+      onPress={() => router.push({ pathname: '/vacunas/form', params: { id: v.id, petId: v.pet_id } })}
+      style={[styles.treatment, !isLatest && { opacity: 0.7 }]}
+    >
+      <Icon name="needle" color={colors.primary} />
+      <View style={{ flex: 1 }}>
+        <Row wrap gap={6}>
+          <Txt variant="bodyStrong">{v.vaccine}</Txt>
+          {tone ? <Chip label={tone.label} fg={tone.fg} bg={tone.bg} /> : <Chip label="Historial" fg={colors.neutral} bg={colors.neutralSoft} />}
+        </Row>
+        <Txt variant="small">
+          Aplicada el {fmtDate(v.applied_on)}
+          {v.next_due ? ` · Próxima dosis: ${fmtDate(v.next_due)}` : ''}
+          {v.batch ? ` · Lote ${v.batch}` : ''}
+        </Txt>
+        {v.notes ? <Txt variant="small">{v.notes}</Txt> : null}
+      </View>
+    </Pressable>
+  );
+}
+
 function TreatmentLine({ t }: { t: Treatment }) {
   const today = toDbDate(new Date());
   const ongoing = (!t.end_date || t.end_date >= today) && (!t.start_date || t.start_date <= today);
@@ -460,7 +565,7 @@ function FileLine({ f, onPress }: { f: PetFile; onPress: () => void }) {
         />
       }
       title={f.file_name}
-      subtitle={[fileCategoryLabel[f.category], fmtDate(new Date(f.created_at)), fmtSize(f.size_bytes), f.description]
+      subtitle={[fileCategoryLabel[f.category], f.study_date ? `Estudio del ${fmtDate(f.study_date)}` : `Subido el ${fmtDate(new Date(f.created_at))}`, fmtSize(f.size_bytes), f.description]
         .filter(Boolean)
         .join(' · ')}
       right={<Icon name="open-in-new" />}
@@ -470,6 +575,20 @@ function FileLine({ f, onPress }: { f: PetFile; onPress: () => void }) {
 }
 
 const styles = StyleSheet.create({
+  photo: { borderRadius: 44 },
+  photoBadge: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    borderWidth: 2,
+    borderColor: colors.surface,
+  },
   owner: {
     gap: space.sm,
     padding: space.md,

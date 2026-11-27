@@ -11,7 +11,6 @@ import {
   Icon,
   initials,
   ListItem,
-  Loading,
   Row,
   Screen,
   SearchBar,
@@ -22,6 +21,7 @@ import { cleanSearch, supabase } from '@/lib/supabase';
 import { space } from '@/lib/theme';
 import type { Client } from '@/lib/types';
 import { useQuery } from '@/lib/use-query';
+import { clientsOffline } from '@/lib/offline-queries';
 
 type Filter = 'activos' | 'inactivos' | 'todos';
 type ClientRow = Client & { pets: { count: number }[] };
@@ -36,10 +36,11 @@ export default function ClientsScreen() {
     const term = cleanSearch(q);
     if (term) query = query.or(`first_name.ilike.%${term}%,last_name.ilike.%${term}%,email.ilike.%${term}%`);
     return query;
-  }, [q, filter]);
+  }, [q, filter], 'clientes', (m) => clientsOffline(m, q, filter));
 
   return (
     <Screen
+      loading={loading && !data}
       title="Clientes"
       subtitle="Dueños y tutores de las mascotas"
       actions={<Button title="Nuevo cliente" icon="account-plus-outline" variant="accent" onPress={() => router.push('/clientes/form')} />}
@@ -60,7 +61,6 @@ export default function ClientsScreen() {
       {error ? <ErrorBox message={error} /> : null}
 
       <Card style={{ gap: 2 }}>
-        {loading && !data ? <Loading /> : null}
         {data?.length === 0 ? <EmptyState icon="account-search-outline" text="No se encontraron clientes." /> : null}
         {data?.map((c) => {
           const st = clientStatus(c.active);

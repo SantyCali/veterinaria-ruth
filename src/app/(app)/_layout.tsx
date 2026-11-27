@@ -2,6 +2,9 @@ import { router, Stack, usePathname, type Href } from 'expo-router';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { GlobalSearch, SearchFab, SearchTrigger, useSearchShortcut } from '@/components/global-search';
+import { OfflineBanner } from '@/components/offline-banner';
+import { useOfflineSync } from '@/lib/offline';
 import { Avatar, Icon, initials, Txt, type IconName } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { roleLabel } from '@/lib/labels';
@@ -26,28 +29,35 @@ function isActive(pathname: string, item: NavItem) {
   return pathname === item.match || pathname.startsWith(`${item.match}/`);
 }
 
+/**
+ * Ir a una sección desde el menú sin apilar pantallas: si la sección ya está en el
+ * historial vuelve a ella; si no, reemplaza la actual. Así la memoria no crece con el uso.
+ */
+function goToSection(pathname: string, item: NavItem) {
+  if (pathname === item.match) return;
+  router.dismissTo(item.href);
+}
+
 export default function AppLayout() {
   const { width } = useWindowDimensions();
   const wide = width >= WIDE_BREAKPOINT;
   const pathname = usePathname();
+  useSearchShortcut();
+  // Copia local automática de la base (backup + modo sin internet).
+  useOfflineSync();
 
-  const stack = (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }} />
-  );
-
-  if (wide) {
-    return (
-      <View style={{ flex: 1, flexDirection: 'row', backgroundColor: colors.background }}>
-        <Sidebar pathname={pathname} />
-        <View style={{ flex: 1 }}>{stack}</View>
-      </View>
-    );
-  }
-
+  // Misma estructura en PC y celu (solo cambia qué menú se muestra), para que al
+  // cruzar el ancho límite no se vuelva a montar toda la navegación.
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <View style={{ flex: 1 }}>{stack}</View>
-      <BottomBar pathname={pathname} />
+    <View style={{ flex: 1, flexDirection: wide ? 'row' : 'column', backgroundColor: colors.background }}>
+      {wide ? <Sidebar pathname={pathname} /> : null}
+      <View style={{ flex: 1 }}>
+        <OfflineBanner />
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }} />
+        {wide ? null : <SearchFab bottom={16} />}
+      </View>
+      {wide ? null : <BottomBar pathname={pathname} />}
+      <GlobalSearch />
     </View>
   );
 }
@@ -66,6 +76,8 @@ function Sidebar({ pathname }: { pathname: string }) {
         </View>
       </View>
 
+      <SearchTrigger />
+
       <View style={{ gap: 4, flex: 1 }}>
         {NAV.map((item) => {
           const active = isActive(pathname, item);
@@ -74,7 +86,7 @@ function Sidebar({ pathname }: { pathname: string }) {
               key={item.match}
               accessibilityRole="link"
               accessibilityState={{ selected: active }}
-              onPress={() => router.navigate(item.href)}
+              onPress={() => goToSection(pathname, item)}
               style={(state) => [
                 styles.navItem,
                 active && styles.navItemActive,
@@ -120,7 +132,7 @@ function BottomBar({ pathname }: { pathname: string }) {
             key={item.match}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
-            onPress={() => router.navigate(item.href)}
+            onPress={() => goToSection(pathname, item)}
             style={styles.tab}
           >
             <View style={[styles.tabIcon, active && { backgroundColor: colors.primarySoft }]}>

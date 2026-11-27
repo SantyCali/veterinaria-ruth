@@ -65,7 +65,28 @@ export type Pet = {
   notes: string | null;
   status: PetStatus;
   deceased_at: string | null;
+  /** Ruta de la foto de perfil en el bucket privado pet-files. */
+  photo_path: string | null;
   created_at: string;
+};
+
+export type Vaccination = {
+  id: string;
+  pet_id: string;
+  vaccine: string;
+  applied_on: string;
+  next_due: string | null;
+  batch: string | null;
+  vet_id: string | null;
+  notes: string | null;
+  active: boolean;
+  created_at: string;
+};
+
+export type VaccinationWithPet = Vaccination & {
+  pet: (Pick<Pet, 'id' | 'name' | 'species' | 'photo_path' | 'status'> & {
+    client: Pick<Client, 'id' | 'first_name' | 'last_name' | 'phone'> | null;
+  }) | null;
 };
 
 export type PetWithClient = Pet & {
@@ -120,7 +141,7 @@ export type Consultation = {
 
 export type ConsultationFull = Consultation & {
   vet: Pick<Profile, 'id' | 'first_name' | 'last_name'> | null;
-  pet?: Pick<Pet, 'id' | 'name' | 'species'> | null;
+  pet?: Pick<Pet, 'id' | 'name' | 'species' | 'photo_path'> | null;
 };
 
 export type Treatment = {
@@ -167,5 +188,7 @@ export type DailyNote = {
   id: string;
   note_date: string;
   content: string;
+  /** false = borrada desde la app (baja lógica). */
+  active: boolean;
   created_at: string;
 };

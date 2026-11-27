@@ -12,6 +12,7 @@ import { useEffect } from 'react';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { DialogHost } from '@/components/dialog-host';
 import { SetupNeeded } from '@/components/setup-needed';
 import { Loading } from '@/components/ui';
 import { AuthProvider, useAuth } from '@/lib/auth';
@@ -44,6 +45,8 @@ export default function RootLayout() {
       ) : (
         <SetupNeeded />
       )}
+      {/* Toasts y confirmaciones de toda la app (ver src/lib/dialogs.ts) */}
+      <DialogHost />
     </SafeAreaProvider>
   );
 }
